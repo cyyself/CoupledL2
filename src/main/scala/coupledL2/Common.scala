@@ -69,6 +69,7 @@ class TaskBundle(implicit p: Parameters) extends L2Bundle with HasChannelBits {
   val mshrId = UInt(mshrBits.W)           // mshr entry index (used only in mshr-task)
   val aliasTask = aliasBitsOpt.map(_ => Bool()) // Anti-alias
   val useProbeData = Bool()               // data source, true for ReleaseBuf and false for RefillBuf
+  val mshrRetry = Bool()                  // is retry task for mshr conflict
 
   // For Intent
   val fromL2pft = prefetchOpt.map(_ => Bool()) // Is the prefetch req from L2(BOP) or from L1 prefetch?
@@ -163,9 +164,9 @@ class MSHRInfo(implicit p: Parameters) extends L2Bundle {
 
   // to block Acquire for to-be-replaced data until Release done (indicated by ReleaseAck received)
   val needRelease = Bool()
-  // MSHR needs to send ReleaseTask but has not yet sent it
+  // MSHR needs to send ReleaseTask but has not in mainpipe s3, RefillTask in MP need to block
   // PS: ReleaseTask is also responsible for writing refillData to DS when A miss
-  val releaseNotSent = Bool()
+  val blockRefill = Bool()
 
   val metaTag = UInt(tagBits.W)
   val dirHit = Bool()
@@ -209,6 +210,7 @@ class FSMState(implicit p: Parameters) extends L2Bundle {
   val s_refill = Bool()   // respond grant upwards
   // val s_grantack = Bool() // respond grantack downwards, moved to GrantBuf
   // val s_triggerprefetch = prefetchOpt.map(_ => Bool())
+  val s_retry = Bool()    // need retry when conflict
 
   // wait
   val w_rprobeackfirst = Bool()

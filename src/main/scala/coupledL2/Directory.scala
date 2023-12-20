@@ -188,10 +188,11 @@ class Directory(implicit p: Parameters) extends L2Module {
   val chosenWay = Mux(inv, invalidWay, replaceWay)
   // if chosenWay not in wayMask, then choose a way in wayMask
   // TODO: consider remove this is not used for better timing
+  // for retry bug fixing: if the chosenway cause retry last time, choose another way
   val finalWay = Mux(
     req_s3.wayMask(chosenWay),
     chosenWay,
-    PriorityEncoder(req_s3.wayMask) // can be optimized
+    PriorityEncoder(req_s3.wayMask)
   )
 
   val hit_s3 = Cat(hitVec).orR
@@ -222,7 +223,7 @@ class Directory(implicit p: Parameters) extends L2Module {
   // we cancel the Grant and let it retry
   // TODO: timing?
   val wayConflictMask = VecInit(io.msInfo.map(s =>
-    s.valid && s.bits.set === req_s3.set && (s.bits.releaseNotSent || s.bits.dirHit) && s.bits.way === finalWay
+    s.valid && s.bits.set === req_s3.set && (s.bits.blockRefill || s.bits.dirHit) && s.bits.way === finalWay
   )).asUInt
   val refillRetry = wayConflictMask.orR
 
