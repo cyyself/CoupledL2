@@ -195,7 +195,7 @@ class OffsetScoreTable(name: String = "")(implicit p: Parameters) extends BOPMod
   
   val badscoreConstant = WireInit(Constantin.createRecord(name+"BadScore", bopParams.badScore.U))
   val bestOffset = RegInit(2.U(offsetWidth.W)) // the entry with the highest score while traversing
-  val bestScore = RegInit(bopParams.initScore.U)
+  val bestScore = RegInit(initScore.U)
   val testOffset = offList(ptr)
   // def winner(e1: ScoreTableEntry, e2: ScoreTableEntry): ScoreTableEntry = {
   //   val w = Wire(new ScoreTableEntry)
