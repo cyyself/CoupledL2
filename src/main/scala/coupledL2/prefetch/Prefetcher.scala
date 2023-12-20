@@ -260,7 +260,8 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
             -12, -10, -9, -8, -6, -5, -4, -3, -2, -1,
             1, 2, 3, 4, 5, 6, 8, 9, 10,
             12, 15, 16, 18, 20, 24, 25, 27, 30
-          ))))
+          ),
+          badScore = 0)))
       })))
       val vbop = Module(new VBestOffsetPrefetch()(p.alterPartial({
         case L2ParamKey => p(L2ParamKey).copy(prefetch = Some(BOPParameters()))
@@ -300,14 +301,6 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       tp.io.train <> io.train
       tp.io.resp <> io.resp
 
-      // send to prq
-      pftQueue.io.enq.valid := pfRcv.io.req.valid || (l2_pf_en && (vbop.io.req.valid || pbop.io.req.valid || tp.io.req.valid))
-      pftQueue.io.enq.bits := ParallelPriorityMux(Seq(
-        pfRcv.io.req.valid -> pfRcv.io.req.bits,
-        vbop.io.req.valid -> vbop.io.req.bits,
-        pbop.io.req.valid -> pbop.io.req.bits,
-        tp.io.req.valid -> tp.io.req.bits
-      ))
       pfRcv.io.req.ready := true.B
       vbop.io.req.ready := true.B
       pbop.io.req.ready := true.B
@@ -318,16 +311,80 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       // tpmeta interface
       tp.io.tpmeta_port <> tpio.tpmeta_port.get
 
-      XSPerfAccumulate(cacheParams, "prefetch_req_fromL1", pfRcv.io.req.valid)
-      XSPerfAccumulate(cacheParams, "prefetch_req_fromBOP", l2_pf_en && vbop.io.req.valid)
-      XSPerfAccumulate(cacheParams, "prefetch_req_fromPBOP", l2_pf_en && pbop.io.req.valid)
-      XSPerfAccumulate(cacheParams, "prefetch_req_fromTP", l2_pf_en && tp.io.req.valid)
-      XSPerfAccumulate(cacheParams, "prefetch_req_selectL1", pfRcv.io.req.valid)
-      XSPerfAccumulate(cacheParams, "prefetch_req_selectPBOP", l2_pf_en && !pfRcv.io.req.valid && pbop.io.req.valid)
-      XSPerfAccumulate(cacheParams, "prefetch_req_selectBOP", l2_pf_en && !pfRcv.io.req.valid && !pbop.io.req.valid && vbop.io.req.valid)
-      XSPerfAccumulate(cacheParams, "prefetch_req_selectTP", l2_pf_en && !pfRcv.io.req.valid && !vbop.io.req.valid && !pbop.io.req.valid && tp.io.req.valid)
-      XSPerfAccumulate(cacheParams, "prefetch_req_SMS_other_overlapped",
-        pfRcv.io.req.valid && l2_pf_en && (vbop.io.req.valid || tp.io.req.valid))
+      /* vpbop: pri vbop */
+     pftQueue.io.enq.valid := pfRcv.io.req.valid || (l2_pf_en && (vbop.io.req.valid || pbop.io.req.valid || tp.io.req.valid))
+     pftQueue.io.enq.bits := ParallelPriorityMux(Seq(
+       pfRcv.io.req.valid -> pfRcv.io.req.bits,
+       vbop.io.req.valid -> vbop.io.req.bits,
+       pbop.io.req.valid -> pbop.io.req.bits,
+       tp.io.req.valid -> tp.io.req.bits
+     ))
+     XSPerfAccumulate(cacheParams, "prefetch_req_fromL1", l2_pf_en && pfRcv.io.req.valid)
+     XSPerfAccumulate(cacheParams, "prefetch_req_fromBOP", l2_pf_en && vbop.io.req.valid)
+     XSPerfAccumulate(cacheParams, "prefetch_req_fromPBOP", l2_pf_en && pbop.io.req.valid)
+     XSPerfAccumulate(cacheParams, "prefetch_req_fromTP", l2_pf_en && tp.io.req.valid)
+     XSPerfAccumulate(cacheParams, "prefetch_req_selectL1", l2_pf_en && pfRcv.io.req.valid)
+     XSPerfAccumulate(cacheParams, "prefetch_req_selectBOP", l2_pf_en && !pfRcv.io.req.valid && vbop.io.req.valid)
+     XSPerfAccumulate(cacheParams, "prefetch_req_selectPBOP", l2_pf_en && !pfRcv.io.req.valid && !vbop.io.req.valid && pbop.io.req.valid)
+     XSPerfAccumulate(cacheParams, "prefetch_req_selectTP", l2_pf_en && !pfRcv.io.req.valid && !vbop.io.req.valid && !pbop.io.req.valid && tp.io.req.valid)
+     XSPerfAccumulate(cacheParams, "prefetch_req_SMS_other_overlapped",
+       pfRcv.io.req.valid && l2_pf_en && (vbop.io.req.valid || tp.io.req.valid))
+
+      /* pvbop: pri pbop */
+//      pftQueue.io.enq.valid := pfRcv.io.req.valid || (l2_pf_en && (vbop.io.req.valid || pbop.io.req.valid || tp.io.req.valid))
+//      pftQueue.io.enq.bits := ParallelPriorityMux(Seq(
+//        pfRcv.io.req.valid -> pfRcv.io.req.bits,
+//        pbop.io.req.valid -> pbop.io.req.bits,
+//        vbop.io.req.valid -> vbop.io.req.bits,
+//        tp.io.req.valid -> tp.io.req.bits
+//      ))
+//      XSPerfAccumulate(cacheParams, "prefetch_req_fromL1", l2_pf_en && pfRcv.io.req.valid)
+//      XSPerfAccumulate(cacheParams, "prefetch_req_fromBOP", l2_pf_en && vbop.io.req.valid)
+//      XSPerfAccumulate(cacheParams, "prefetch_req_fromPBOP", l2_pf_en && pbop.io.req.valid)
+//      XSPerfAccumulate(cacheParams, "prefetch_req_fromTP", l2_pf_en && tp.io.req.valid)
+//      XSPerfAccumulate(cacheParams, "prefetch_req_selectL1", l2_pf_en && pfRcv.io.req.valid)
+//      XSPerfAccumulate(cacheParams, "prefetch_req_selectPBOP", l2_pf_en && !pfRcv.io.req.valid && pbop.io.req.valid)
+//      XSPerfAccumulate(cacheParams, "prefetch_req_selectBOP", l2_pf_en && !pfRcv.io.req.valid && !pbop.io.req.valid && vbop.io.req.valid)
+//      XSPerfAccumulate(cacheParams, "prefetch_req_selectTP", l2_pf_en && !pfRcv.io.req.valid && !vbop.io.req.valid && !pbop.io.req.valid && tp.io.req.valid)
+//      XSPerfAccumulate(cacheParams, "prefetch_req_SMS_other_overlapped",
+//        pfRcv.io.req.valid && l2_pf_en && (vbop.io.req.valid || tp.io.req.valid))
+
+       /* solo vbop */
+      //  pbop.io.train.valid := false.B
+      //  pbop.io.resp.valid := false.B
+      //  pftQueue.io.enq.valid := pfRcv.io.req.valid || (l2_pf_en && (vbop.io.req.valid || tp.io.req.valid))
+      //  pftQueue.io.enq.bits := ParallelPriorityMux(Seq(
+      //    pfRcv.io.req.valid -> pfRcv.io.req.bits,
+      //    vbop.io.req.valid -> vbop.io.req.bits,
+      //    tp.io.req.valid -> tp.io.req.bits
+      //  ))
+      //  XSPerfAccumulate(cacheParams, "prefetch_req_fromL1", l2_pf_en && pfRcv.io.req.valid)
+      //  XSPerfAccumulate(cacheParams, "prefetch_req_fromBOP", l2_pf_en && vbop.io.req.valid)
+      //  XSPerfAccumulate(cacheParams, "prefetch_req_fromTP", l2_pf_en && tp.io.req.valid)
+      //  XSPerfAccumulate(cacheParams, "prefetch_req_selectL1", l2_pf_en && pfRcv.io.req.valid)
+      //  XSPerfAccumulate(cacheParams, "prefetch_req_selectBOP", l2_pf_en && !pfRcv.io.req.valid && vbop.io.req.valid)
+      //  XSPerfAccumulate(cacheParams, "prefetch_req_selectTP", l2_pf_en && !pfRcv.io.req.valid && !vbop.io.req.valid && tp.io.req.valid)
+      //  XSPerfAccumulate(cacheParams, "prefetch_req_SMS_other_overlapped",
+      //    pfRcv.io.req.valid && l2_pf_en && (vbop.io.req.valid || tp.io.req.valid))
+
+      /* solo pbop */
+//      vbop.io.train.valid := false.B
+//      vbop.io.resp.valid := false.B
+//     pftQueue.io.enq.valid := pfRcv.io.req.valid || (l2_pf_en && (pbop.io.req.valid || tp.io.req.valid))
+//     pftQueue.io.enq.bits := ParallelPriorityMux(Seq(
+//       pfRcv.io.req.valid -> pfRcv.io.req.bits,
+//       pbop.io.req.valid -> pbop.io.req.bits,
+//       tp.io.req.valid -> tp.io.req.bits
+//     ))
+//     XSPerfAccumulate(cacheParams, "prefetch_req_fromL1", l2_pf_en && pfRcv.io.req.valid)
+//     XSPerfAccumulate(cacheParams, "prefetch_req_fromPBOP", l2_pf_en && pbop.io.req.valid)
+//     XSPerfAccumulate(cacheParams, "prefetch_req_fromTP", l2_pf_en && tp.io.req.valid)
+//     XSPerfAccumulate(cacheParams, "prefetch_req_selectL1", l2_pf_en && pfRcv.io.req.valid)
+//     XSPerfAccumulate(cacheParams, "prefetch_req_selectPBOP", l2_pf_en && !pfRcv.io.req.valid && pbop.io.req.valid)
+//     XSPerfAccumulate(cacheParams, "prefetch_req_selectTP", l2_pf_en && !pfRcv.io.req.valid && !pbop.io.req.valid && tp.io.req.valid)
+//     XSPerfAccumulate(cacheParams, "prefetch_req_SMS_other_overlapped",
+//       pfRcv.io.req.valid && l2_pf_en && (vbop.io.req.valid || tp.io.req.valid))
+
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }
