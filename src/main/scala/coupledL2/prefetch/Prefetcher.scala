@@ -113,7 +113,7 @@ trait HasPrefetcherHelper extends HasCircularQueuePtrHelper with HasCoupledL2Par
 class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   val tag = UInt(fullTagBits.W)
   val set = UInt(setBits.W)
-  val vaddr = vaddrBitsOpt.map(_ => UInt(vaddrBitsOpt.get.W))
+  val vaddr = vaddrBitsOpt.map(_ => UInt(vaddrBitsOpt.getOrElse(0).W))
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
   val pfSource = UInt(MemReqSource.reqSourceBits.W)
@@ -134,7 +134,7 @@ class PrefetchResp(implicit p: Parameters) extends PrefetchBundle {
   // val id = UInt(sourceIdBits.W)
   val tag = UInt(fullTagBits.W)
   val set = UInt(setBits.W)
-  val vaddr = vaddrBitsOpt.map(_ => UInt(vaddrBitsOpt.get.W))
+  val vaddr = vaddrBitsOpt.map(_ => UInt(vaddrBitsOpt.getOrElse(0).W))
   val pfSource = UInt(MemReqSource.reqSourceBits.W)
 
   def addr = Cat(tag, set, 0.U(offsetBits.W))
@@ -154,7 +154,7 @@ class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
   val set = UInt(setBits.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
-  val vaddr = vaddrBitsOpt.map(_ => UInt(vaddrBitsOpt.get.W))
+  val vaddr = vaddrBitsOpt.map(_ => UInt(vaddrBitsOpt.getOrElse(0).W))
   val hit = Bool()
   val prefetched = Bool()
   val pfsource = UInt(PfSource.pfSourceBits.W)
