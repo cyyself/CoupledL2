@@ -79,7 +79,10 @@ class RequestArb(implicit p: Parameters) extends L2Module {
     resetFinish := true.B
   }
 
-  val mshr_task_s0 = Wire(Valid(new TaskBundle()))
+  val s0_canngo, s1_cango = Wire(Bool())
+  val s0_fire, s1_fire = Wire(Bool())
+  val s1_ready, s2_ready = Wire(Bool())
+
   val mshr_task_s1 = RegInit(0.U.asTypeOf(Valid(new TaskBundle())))
 
   val s1_needs_replRead = mshr_task_s1.valid && mshr_task_s1.bits.fromA && mshr_task_s1.bits.replTask && (
@@ -87,21 +90,22 @@ class RequestArb(implicit p: Parameters) extends L2Module {
     mshr_task_s1.bits.opcode === AccessAckData ||
     mshr_task_s1.bits.opcode === HintAck && mshr_task_s1.bits.dsWen
   )
+  val mshr_replRead_stall = s1_needs_replRead && (!io.dirRead_s1.ready || io.fromMainPipe.blockG_s1)
 
   /* ======== Stage 0 ======== */
   // if mshr_task_s1 is replRead, it might stall and wait for dirRead.ready, so we block new mshrTask from entering
   // TODO: will cause msTask path vacant for one-cycle after replRead, since not use Flow so as to avoid ready propagation
   io.mshrTask.ready := !io.fromGrantBuffer.blockMSHRReqEntrance && !s1_needs_replRead && !io.fromSourceC.blockMSHRReqEntrance
-  mshr_task_s0.valid := io.mshrTask.fire
-  mshr_task_s0.bits := io.mshrTask.bits
+
+  s0_canngo := io.mshrTask.valid && io.mshrTask.ready
+  s1_ready := !mshr_replRead_stall
+  s0_fire := s0_canngo && s1_ready
 
   /* ======== Stage 1 ======== */
   /* latch mshr_task from s0 to s1 */
-  val mshr_replRead_stall = mshr_task_s1.valid && s1_needs_replRead && (!io.dirRead_s1.ready || io.fromMainPipe.blockG_s1)
-
-  mshr_task_s1.valid := mshr_task_s0.valid || mshr_replRead_stall
-  when(mshr_task_s0.valid && !mshr_replRead_stall) {
-    mshr_task_s1.bits := mshr_task_s0.bits
+  mshr_task_s1.valid := mshr_task_s1.valid && !s1_fire || s0_fire
+  when(s0_fire) {
+    mshr_task_s1.bits := io.mshrTask.bits
   }
 
   /* Channel interaction from s1 */
@@ -156,9 +160,13 @@ class RequestArb(implicit p: Parameters) extends L2Module {
   )
 
   /* ========  Stage 2 ======== */
+  s1_cango := task_s1.valid && !mshr_replRead_stall
+  s2_ready := true.B
+  s1_fire := s1_cango && s2_ready
+
   val task_s2 = RegInit(0.U.asTypeOf(task_s1))
-  task_s2.valid := task_s1.valid && !mshr_replRead_stall
-  when(task_s1.valid && !mshr_replRead_stall) { task_s2.bits := task_s1.bits }
+  task_s2.valid := s1_fire
+  when(s1_fire) { task_s2.bits := task_s1.bits }
 
   io.taskToPipe_s2 := task_s2
 
@@ -199,7 +207,7 @@ class RequestArb(implicit p: Parameters) extends L2Module {
   dontTouch(io)
 
   // Performance counters
-  XSPerfAccumulate(cacheParams, "mshr_req", mshr_task_s0.valid)
+  XSPerfAccumulate(cacheParams, "mshr_req", s0_fire)
   XSPerfAccumulate(cacheParams, "mshr_req_stall", io.mshrTask.valid && !io.mshrTask.ready)
 
   XSPerfAccumulate(cacheParams, "sinkA_req", io.sinkA.fire)
